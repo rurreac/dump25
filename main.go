@@ -42,6 +42,7 @@ var flagHttpPort string
 var flagSmtpPort string
 var flagExpTime int
 var flagSmtpAuth bool
+var flagCachePath string
 var queueCache *cache.Cache
 
 func init() {
@@ -49,16 +50,21 @@ func init() {
 	flag.StringVar(&flagSmtpPort, "smtpPort", defaultSmtpPort, "What port should the fake SMTP Server use.")
 	flag.IntVar(&flagExpTime, "expTime", defaultExpirationTime, "Expiration time (hours) of each Item in Queue.")
 	flag.BoolVar(&flagSmtpAuth, "smtpAuth", smtpAuthentication, "Whatever if dump25 should ask for SMTP authentication.")
+	flag.StringVar(&flagCachePath, "cachePath", "./", "Directory where Cache should be stored.")
 	flag.Parse()
 
 	queueCache = cache.New(defaultExpirationTime*time.Hour, defaultCleanUpInterval*time.Hour)
 
 	gob.Register(&emailCompose{})
 
-	if _, err := os.Stat(cacheFile); err == nil {
-		log.Println("Loading Cache File -", cacheFile)
-		if err = queueCache.LoadFile(cacheFile); err != nil {
+	if _, err := os.Stat(flagCachePath + cacheFile); err == nil {
+		log.Println("Loading Cache File -", flagCachePath+cacheFile)
+		if err = queueCache.LoadFile(flagCachePath + cacheFile); err != nil {
 			log.Println("Failed to load existing Cache File;", err)
+		}
+	} else {
+		if err := os.MkdirAll(flagCachePath, os.ModePerm); err != nil {
+			log.Panicf("Can't create Cache directory - %v\n", err)
 		}
 	}
 
@@ -127,7 +133,7 @@ func flushCache(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func requireAuth(conn net.Conn, authStatus bool, email emailCompose) (require bool)  {
+func requireAuth(conn net.Conn, authStatus bool, email emailCompose) (require bool) {
 	if flagSmtpAuth && !authStatus {
 		io.WriteString(conn, "535 Incorrect authentication data\r\n")
 		log.Printf("Client %v did not perform authentication.", email.SourceIP)
@@ -199,7 +205,7 @@ func smtp(conn net.Conn) {
 			jsonEmail, _ := json.Marshal(email)
 			log.Println(string(jsonEmail))
 			queueCache.Set(email.Id.String(), &email, cache.DefaultExpiration)
-			if err := queueCache.SaveFile(cacheFile); err != nil {
+			if err := queueCache.SaveFile(flagCachePath + cacheFile); err != nil {
 				log.Printf("Could not save email to cache file - %v\n", err)
 				return
 			}

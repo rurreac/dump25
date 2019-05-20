@@ -16,14 +16,17 @@ except items in queue that reached its expiration time.
 Just a little bit of optional configuration (`./dump25 -help` output):
 ```
 Usage of ./dump25:
+  -cachePath string
+        Directory where Cache should be stored. (default "./")
   -expTime int
         Expiration time (hours) of each Item in Queue. (default 8)
   -httpPort string
         What port should the HTTP Server use. (default "10080")
   -smtpAuth
-        Whatever if dump25 should ask for SMTP authentication.
+        Whatever dump25 should ask for SMTP authentication.
   -smtpPort string
         What port should the fake SMTP Server use. (default "10025")
+
 ```
 
 Note that enabling SMTP authentication, requires the client to provide user and password (anything), 
