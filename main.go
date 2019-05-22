@@ -51,7 +51,8 @@ func init() {
 	if _, err := os.Stat(flagCachePath + cacheFile); err == nil {
 		logD.Println("Loading Cache File -", flagCachePath+cacheFile)
 		if err = inboxCache.LoadFile(flagCachePath + cacheFile); err != nil {
-			logD.Println("Failed to load existing Cache File;", err)
+			logD.Printf("Failed to load existing Cache File; %v, purging current Cache.\n", err)
+			os.Remove(flagCachePath + cacheFile)
 		}
 	} else {
 		if err := os.MkdirAll(flagCachePath, os.ModePerm); err != nil {
@@ -102,7 +103,7 @@ func smtp(conn net.Conn) {
 	email.SourceIP = conn.RemoteAddr().String()
 
 	defer func() {
-		conn.Close()
+		_ = conn.Close()
 		logD.Printf("Client %v disconnected.\n", email.SourceIP)
 	}()
 
