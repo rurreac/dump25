@@ -9,143 +9,74 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
+	"github.com/rurreac/dump25/inbox"
+	"gopkg.in/macaron.v1"
+	"html/template"
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
 )
 
-type emailCompose struct {
-	Id       uuid.UUID `json:"id"`
-	Time     time.Time `json:"time"`
-	SourceIP string    `json:"srcIp"`
-	User     string    `json:"user"`
-	From     string    `json:"from"`
-	Rcpt     []string  `json:"rcpt"`
-	Data     string    `json:"data"`
-}
-
-type queue []*emailCompose
-
-const defaultHttpPort = "10080"
+const defaultHttpPort = 10080
 const defaultSmtpPort = "10025"
 const smtpAuthentication = false
 const defaultExpirationTime = 8
 const defaultCleanUpInterval = 2 * defaultExpirationTime
 const cacheFile = "dump25.gob"
 
-var flagHttpPort string
+var flagHttpPort int
 var flagSmtpPort string
 var flagExpTime int
 var flagSmtpAuth bool
 var flagCachePath string
-var queueCache *cache.Cache
+var inboxCache *cache.Cache
+var logD *log.Logger
 
 func init() {
-	flag.StringVar(&flagHttpPort, "httpPort", defaultHttpPort, "What port should the HTTP Server use.")
+	flag.IntVar(&flagHttpPort, "httpPort", defaultHttpPort, "What port should the HTTP Server use.")
 	flag.StringVar(&flagSmtpPort, "smtpPort", defaultSmtpPort, "What port should the fake SMTP Server use.")
 	flag.IntVar(&flagExpTime, "expTime", defaultExpirationTime, "Expiration time (hours) of each Item in Queue.")
 	flag.BoolVar(&flagSmtpAuth, "smtpAuth", smtpAuthentication, "Whatever if dump25 should ask for SMTP authentication.")
 	flag.StringVar(&flagCachePath, "cachePath", "./", "Directory where Cache should be stored.")
 	flag.Parse()
 
-	queueCache = cache.New(defaultExpirationTime*time.Hour, defaultCleanUpInterval*time.Hour)
-
-	gob.Register(&emailCompose{})
+	gob.Register(&inbox.EmailCompose{})
+	inboxCache = cache.New(defaultExpirationTime*time.Hour, defaultCleanUpInterval*time.Hour)
+	logD = log.New(os.Stdout, "[dump25] ", 0)
 
 	if _, err := os.Stat(flagCachePath + cacheFile); err == nil {
-		log.Println("Loading Cache File -", flagCachePath+cacheFile)
-		if err = queueCache.LoadFile(flagCachePath + cacheFile); err != nil {
-			log.Println("Failed to load existing Cache File;", err)
+		logD.Println("Loading Cache File -", flagCachePath+cacheFile)
+		if err = inboxCache.LoadFile(flagCachePath + cacheFile); err != nil {
+			logD.Println("Failed to load existing Cache File;", err)
 		}
 	} else {
 		if err := os.MkdirAll(flagCachePath, os.ModePerm); err != nil {
-			log.Panicf("Can't create Cache directory - %v\n", err)
+			logD.Panicf("Can't create Cache directory - %v\n", err)
 		}
 	}
 
-}
-
-func dumpJsonQueue(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		log.Panicln(err)
-	}
-	w.Header().Set("Content-Type", "application/json; charset:utf-8")
-	w.WriteHeader(http.StatusOK)
-	err := json.NewEncoder(w).Encode(dumpCache(queueCache, r))
-	if err != nil {
-		log.Panicln(err)
-	}
-}
-
-func dumpCache(c *cache.Cache, r *http.Request) (tmpQ queue) {
-	items := c.Items()
-	ip := r.Form.Get("ip")
-	from := r.Form.Get("from")
-	user := r.Form.Get("user")
-	for _, item := range items {
-		filter := true
-		if ip != "" {
-			if ok, _ := regexp.Match(ip, []byte(item.Object.(*emailCompose).SourceIP)); !ok {
-				filter = false
-			}
-		}
-		if from != "" && filter {
-			if ok, _ := regexp.Match(from, []byte(item.Object.(*emailCompose).From)); ok {
-				filter = true
-			} else {
-				filter = false
-			}
-		}
-		if user != "" && filter {
-			if user == item.Object.(*emailCompose).User {
-				filter = true
-			} else {
-				filter = false
-			}
-		}
-		if filter {
-			tmpQ = append(tmpQ, item.Object.(*emailCompose))
-		}
-	}
-	return
-}
-
-func flushCache(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Cache flush requested from %v.\n", r.RemoteAddr)
-	queueCache.Flush()
-	w.Header().Set("Content-Type", "application/json; charset:utf-8")
-	w.WriteHeader(http.StatusOK)
-
-	err := json.NewEncoder(w).Encode(
-		struct {
-			QueueSize int `json:"queue_size"`
-		}{
-
-			QueueSize: queueCache.ItemCount(),
-		})
-	if err != nil {
-		log.Panic(err)
-	}
-}
-
-func requireAuth(conn net.Conn, authStatus bool, email emailCompose) (require bool) {
-	if flagSmtpAuth && !authStatus {
-		io.WriteString(conn, "535 Incorrect authentication data\r\n")
-		log.Printf("Client %v did not perform authentication.", email.SourceIP)
-		require = true
-	}
-	return
 }
 
 func main() {
-	http.HandleFunc("/", dumpJsonQueue)
-	http.HandleFunc("/flush", flushCache)
-	go http.ListenAndServe(":"+flagHttpPort, nil)
+	m := macaron.Classic()
+	m.Use(macaron.Renderer(macaron.RenderOptions{
+		Funcs: []template.FuncMap{map[string]interface{}{
+			"InboxSize": func() int {
+				return inboxCache.ItemCount()
+			},
+		}},
+	},
+	))
+	m.Get("/", indexHandler)
+	m.Get("/flush", flushInboxHandler)
+	m.Get("/inbox", inboxHandler)
+	m.Get("/inbox/:id", msgHandler)
+
+	go m.Run("0.0.0.0", defaultHttpPort)
 
 	smtpListener, _ := net.Listen("tcp", ":"+flagSmtpPort)
 	defer smtpListener.Close()
@@ -157,7 +88,7 @@ func main() {
 }
 
 func smtp(conn net.Conn) {
-	var email emailCompose
+	var email inbox.EmailCompose
 	var auth bool
 
 	email.Id = uuid.New()
@@ -166,7 +97,7 @@ func smtp(conn net.Conn) {
 
 	defer func() {
 		conn.Close()
-		log.Printf("Client %v disconnected.\n", email.SourceIP)
+		logD.Printf("Client %v disconnected.\n", email.SourceIP)
 	}()
 
 	io.WriteString(conn, "220 Dump25 Service.\r\n")
@@ -193,8 +124,14 @@ func smtp(conn net.Conn) {
 			}
 			io.WriteString(conn, "354 Start mail input; end with <CRLF>.<CRLF>\r\n")
 			var data string
+			var boundaryFound bool
 			for scanner.Scan() {
 				dataLine := scanner.Text()
+				if !boundaryFound {
+					if ok, _ := regexp.Match(`^Content-Type: multipart/[[:alpha:]]+; boundary=`, []byte(dataLine)); ok {
+						email.Boundary = strings.ReplaceAll(strings.SplitAfter(dataLine, "boundary=")[1], `"`, ``)
+					}
+				}
 				if dataLine != "." {
 					data += dataLine + "\n"
 				} else {
@@ -203,10 +140,10 @@ func smtp(conn net.Conn) {
 			}
 			email.Data = data
 			jsonEmail, _ := json.Marshal(email)
-			log.Println(string(jsonEmail))
-			queueCache.Set(email.Id.String(), &email, cache.DefaultExpiration)
-			if err := queueCache.SaveFile(flagCachePath + cacheFile); err != nil {
-				log.Printf("Could not save email to cache file - %v\n", err)
+			logD.Println(string(jsonEmail))
+			inboxCache.Set(email.Id.String(), &email, cache.DefaultExpiration)
+			if err := inboxCache.SaveFile(flagCachePath + cacheFile); err != nil {
+				logD.Printf("Could not save email to cache file - %v\n", err)
 				return
 			}
 			fmt.Fprintf(conn, "250 2.0.0 Ok: Email Id %v queued in dump25\r\n", email.Id.String())
@@ -245,4 +182,48 @@ func smtp(conn net.Conn) {
 			}
 		}
 	}
+}
+
+func requireAuth(conn net.Conn, authStatus bool, email inbox.EmailCompose) (require bool) {
+	if flagSmtpAuth && !authStatus {
+		io.WriteString(conn, "535 Incorrect authentication data\r\n")
+		logD.Printf("Client %v did not perform authentication.", email.SourceIP)
+		require = true
+	}
+	return
+}
+
+func inboxHandler(ctx *macaron.Context) {
+	m := ctx.Req.Form
+	ib := inbox.Get(inboxCache, m)
+	ctx.JSON(200, &ib)
+}
+
+func msgHandler(ctx *macaron.Context) {
+	if msg, err := inbox.GetMessage(inboxCache, ctx.Params("id")); err != nil {
+		ctx.HTML(500, "message", err)
+	} else {
+		ctx.Req.ParseForm()
+		if ctx.Req.Form.Get("plain") == "true" {
+			ctx.PlainText(200, []byte(msg))
+		}
+		ctx.Write([]byte(msg))
+	}
+}
+
+func indexHandler(ctx *macaron.Context) {
+	ctx.Req.ParseForm()
+	ib := inbox.Get(inboxCache, ctx.Req.Form)
+	ctx.Data["inbox"] = ib
+	ctx.HTML(200, "index")
+}
+
+func flushInboxHandler(ctx *macaron.Context) {
+	logD.Printf("Cache flush requested from %v.\n", ctx.RemoteAddr())
+	inboxCache.Flush()
+	ctx.JSON(200, struct {
+		QueueSize int `json:"queue_size"`
+	}{
+		QueueSize: inboxCache.ItemCount(),
+	})
 }

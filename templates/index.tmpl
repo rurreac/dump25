@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>dump25</title>
+</head>
+<body>
+
+<div id="menu">
+    <a href="/flush">Flush Cache</a>
+</div>
+
+{{if .inbox}}
+<div id="inbox">
+    <div class="panel-heading">
+        <h3>Inbox</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Time</th>
+                <th>Source IP</th>
+                <th>From</th>
+                <th>RCPT</th>
+            </tr>
+
+        </thead>
+        <tbody>
+            {{range .inbox}}
+            <tr>
+                <td><a href="/inbox/{{.Id}}">{{.Id}}</a></td>
+                <td>{{.Time}}</td>
+                <td>{{.SourceIP}}</td>
+                <td>{{.From}}</td>
+                <td>{{.Rcpt}}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+</div>
+{{end}}
+</body>
+</html>

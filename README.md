@@ -15,15 +15,14 @@ except items in queue that reached its expiration time.
 
 Just a little bit of optional configuration (`./dump25 -help` output):
 ```
-Usage of ./dump25:
   -cachePath string
         Directory where Cache should be stored. (default "./")
   -expTime int
         Expiration time (hours) of each Item in Queue. (default 8)
-  -httpPort string
-        What port should the HTTP Server use. (default "10080")
+  -httpPort int
+        What port should the HTTP Server use. (default 10080)
   -smtpAuth
-        Whatever dump25 should ask for SMTP authentication.
+        Whatever if dump25 should ask for SMTP authentication.
   -smtpPort string
         What port should the fake SMTP Server use. (default "10025")
 
@@ -32,17 +31,24 @@ Usage of ./dump25:
 Note that enabling SMTP authentication, requires the client to provide user and password (anything), 
 if authentication is not provided, then the client will be rejected, with the corresponding SMTP Error Code.
 
-## Cache flush
-Flushing the current Cache (or purging the queue):
-```
-http://localhost:10080/flush
-```
+## Supported URLs paths
+#### /
+Inbox preview, some other options should be available from there (admits filtering).
+#### /flush
+Purges current Cache (or Inbox).
+#### /inbox
+Dumps a JSON with the current Inbox (admits filtering).
+#### /inbox/:id
+Previews the message with id `:id`.
 
 ## Filtering
 
-It allows filtering by partial or exact match of IP and / or From address:
+Paths where filtering is enabled allow partial or exact match of IP and / or From address:
 ```
-http://localhost:10080/?ip=127.0.0&from=test@dump25.com
+http://<ipAddress>:<port>/<path>?ip=127.0.0&from=test@dump25.com
 ``` 
 If SMTP Authentication is or was enabled, you can also filter by the exact `UserName` used 
 during authentication.
+```
+http://<ipAddress>:<port>/<path>?ip=127.0.0&from=[test1,test2]&user=<user> 
+``` 
