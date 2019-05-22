@@ -69,8 +69,8 @@ func main() {
 				return inboxCache.ItemCount()
 			},
 		}},
-	},
-	))
+		Extensions: []string{".gohtml", ".tmpl", ".html"},
+	}))
 	m.Get("/", indexHandler)
 	m.Get("/flush", flushInboxHandler)
 	m.Get("/inbox", inboxHandler)
