@@ -211,6 +211,7 @@ func msgHandler(ctx *macaron.Context) {
 		ctx.HTML(500, "message", err)
 	} else {
 		ctx.Req.ParseForm()
+
 		if ctx.Req.Form.Get("plain") == "true" {
 			ctx.PlainText(200, []byte(msg))
 		}

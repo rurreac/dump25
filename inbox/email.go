@@ -102,7 +102,7 @@ func Get(c *cache.Cache, m map[string][]string) (tmpI Inbox) {
 			tmpI = append(tmpI, item.Object.(*EmailCompose))
 		}
 	}
-	sort.Reverse(tmpI)
+	sort.Sort(sort.Reverse(tmpI))
 	return
 }
 
