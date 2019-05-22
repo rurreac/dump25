@@ -10,12 +10,13 @@
     <a href="/flush">Flush Cache</a>
 </div>
 
-{{if .inbox}}
+
 <div id="inbox">
     <div class="panel-heading">
         <h3>Inbox&nbsp;({{InboxSize}})</h3>
     </div>
     <table>
+        {{if .inbox}}
         <thead>
             <tr>
                 <th>Id</th>
@@ -24,7 +25,6 @@
                 <th>From</th>
                 <th>RCPT</th>
             </tr>
-
         </thead>
         <tbody>
             {{range .inbox}}
@@ -37,8 +37,8 @@
             </tr>
             {{ end }}
         </tbody>
+        {{end}}
     </table>
 </div>
-{{end}}
 </body>
 </html>
