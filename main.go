@@ -63,6 +63,11 @@ func init() {
 
 func main() {
 	m := macaron.Classic()
+	m.Use(macaron.Static("public",
+		macaron.StaticOptions{
+			Prefix:      "public",
+			SkipLogging: true,
+		}))
 	m.Use(macaron.Renderer(macaron.RenderOptions{
 		Funcs: []template.FuncMap{map[string]interface{}{
 			"InboxSize": func() int {
