@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
+	"gopkg.in/alexcesaro/quotedprintable.v1"
 	"io/ioutil"
 	"net/mail"
 	"regexp"
@@ -37,13 +38,18 @@ func (ib Inbox) Swap(i, j int) {
 	ib[i], ib[j] = ib[j], ib[i]
 }
 
-func GetSourceIp(item cache.Item) (ip string) {
-	ip = item.Object.(*EmailCompose).SourceIP
+func GetId(item cache.Item) (id uuid.UUID) {
+	id = item.Object.(*EmailCompose).Id
 	return
 }
 
-func GetFrom(item cache.Item) (from string) {
-	from = item.Object.(*EmailCompose).From
+func GetTime(item cache.Item) (t time.Time) {
+	t = item.Object.(*EmailCompose).Time
+	return
+}
+
+func GetSourceIp(item cache.Item) (ip string) {
+	ip = item.Object.(*EmailCompose).SourceIP
 	return
 }
 
@@ -52,8 +58,13 @@ func GetUser(item cache.Item) (user string) {
 	return
 }
 
-func GetData(item cache.Item) (data string) {
-	data = item.Object.(*EmailCompose).Data
+func GetFrom(item cache.Item) (from string) {
+	from = item.Object.(*EmailCompose).From
+	return
+}
+
+func GetRcp(item cache.Item) (rcpt []string) {
+	rcpt = item.Object.(*EmailCompose).Rcpt
 	return
 }
 
@@ -106,6 +117,42 @@ func Get(c *cache.Cache, m map[string][]string) (tmpI Inbox) {
 	return
 }
 
+func decodeMessage(text string, encoding string) (dText string) {
+	dText = text
+	switch strings.ToLower(encoding) {
+	case "quoted-printable":
+		if d, err := quotedprintable.DecodeString(text); err == nil {
+			dText = string(d)
+		}
+	}
+	return
+}
+
+func parseMessage(scanner *bufio.Scanner, i interface{}) (pText string) {
+	var ctFound int
+	var encoding string
+	var line string
+	var text string
+	for scanner.Scan() {
+		line = scanner.Text()
+		if ok, _ := regexp.Match(`^Content-Transfer-Encoding:`, []byte(line)); ok {
+			encoding = strings.Fields(line)[1]
+			ctFound += 1
+		} else {
+			if ctFound >= 1 {
+				if ok, _ := regexp.Match("^--"+i.(*EmailCompose).Boundary, []byte(line)); ok {
+					break
+
+				} else {
+					text += line + "\n"
+				}
+			}
+		}
+	}
+	pText = decodeMessage(text, encoding)
+	return
+}
+
 func GetMessage(inboxCache *cache.Cache, id string) (text string, err error) {
 	var body string
 	if item, ok := inboxCache.Get(id); ok {
@@ -115,20 +162,8 @@ func GetMessage(inboxCache *cache.Cache, id string) (text string, err error) {
 			body = string(b)
 
 			scanner := bufio.NewScanner(strings.NewReader(body))
-			var ctFound int
 			for scanner.Scan() {
-				line := scanner.Text()
-				if ok, _ := regexp.Match(`Content-Transfer-Encoding:`, []byte(line)); ok {
-					ctFound += 1
-				} else {
-					if ctFound >= 1 {
-						if ok, _ := regexp.Match("^--"+item.(*EmailCompose).Boundary, []byte(line)); ok {
-							break
-						} else {
-							text += line
-						}
-					}
-				}
+				text = text + parseMessage(scanner, item)
 			}
 		}
 	}

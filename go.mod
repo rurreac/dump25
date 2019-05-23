@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f // indirect
+	gopkg.in/alexcesaro/quotedprintable.v1 v1.0.0-20150213093753-1aaa60cffe23
 	gopkg.in/ini.v1 v1.42.0 // indirect
 	gopkg.in/macaron.v1 v1.3.2
 )
