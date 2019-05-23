@@ -131,9 +131,16 @@ func smtp(conn net.Conn) {
 			}
 			io.WriteString(conn, "354 Start mail input; end with <CRLF>.<CRLF>\r\n")
 			var data string
+			var subjectFound bool
 			var boundaryFound bool
 			for scanner.Scan() {
 				dataLine := scanner.Text()
+				if !subjectFound {
+					if ok, _ := regexp.Match(`^Subject:`, []byte(dataLine)); ok {
+						email.Subject = strings.SplitAfterN(dataLine, ": ", 2)[1]
+						subjectFound = true
+					}
+				}
 				if !boundaryFound {
 					if ok, _ := regexp.Match(`^Content-Type: multipart/[[:alpha:]]+; boundary=`, []byte(dataLine)); ok {
 						email.Boundary = strings.ReplaceAll(strings.SplitAfter(dataLine, "boundary=")[1], `"`, ``)

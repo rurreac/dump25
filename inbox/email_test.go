@@ -12,6 +12,7 @@ func newEmail() (e EmailCompose) {
 	// Use e.Time default value: 0001-01-01 00:00:00 +0000 UTC
 	e.From = "from@dump25.com"
 	e.Rcpt = append(make([]string, 0), "rcpt@dump25.com", "rcpt2@dump25.com")
+	e.Subject = "test"
 	e.Boundary = "----MIME delimiter"
 	e.User = "test"
 	e.SourceIP = "127.0.0.1:49891"
@@ -146,6 +147,18 @@ func TestGetRcp(t *testing.T) {
 	r := GetRcp(i)
 	if len(r) != len(e.Rcpt) {
 		t.Errorf("Got %v, expected %v", len(r), len(e.Rcpt))
+	}
+}
+
+func TestGetSubject(t *testing.T) {
+	e := newEmail()
+	i := cache.Item{
+		Expiration: 0,
+		Object:     &e,
+	}
+	s := GetSubject(i)
+	if s != e.Subject {
+		t.Errorf("Got %v, expected %v.", s, e.Subject)
 	}
 }
 

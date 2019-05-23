@@ -20,6 +20,7 @@ type EmailCompose struct {
 	User     string    `json:"user"`
 	From     string    `json:"from"`
 	Rcpt     []string  `json:"rcpt"`
+	Subject  string    `json:"subject"`
 	Boundary string    `json:"boundary"`
 	Data     string    `json:"data"`
 }
@@ -65,6 +66,11 @@ func GetFrom(item cache.Item) (from string) {
 
 func GetRcp(item cache.Item) (rcpt []string) {
 	rcpt = item.Object.(*EmailCompose).Rcpt
+	return
+}
+
+func GetSubject(item cache.Item) (sb string) {
+	sb = item.Object.(*EmailCompose).Subject
 	return
 }
 
