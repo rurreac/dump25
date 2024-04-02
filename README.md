@@ -20,7 +20,7 @@ Just a little bit of optional configuration (`./dump25 -help` output):
   -expTime int
         Expiration time (hours) of each Item in Queue. (default 8)
   -httpPort int
-        What port should the HTTP Server use. (default 10080)
+        What port should the HTTP Server use. (default 18080)
   -smtpAuth
         Whatever if dump25 should ask for SMTP authentication.
   -smtpPort string

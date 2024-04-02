@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const defaultHttpPort = 10080
+const defaultHttpPort = 18080
 const defaultSmtpPort = "10025"
 const smtpAuthentication = false
 const defaultExpirationTime = 8
